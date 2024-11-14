@@ -1,6 +1,6 @@
 import express from "express";
-import SearchController from "../../controller/searchController";
-import { authMiddleware } from "../../middleware/authMiddleware";
+import SearchController from "../controller/searchController";
+import { authMiddleware } from "../middleware/authMiddleware";
 
 const router = express.Router();
 

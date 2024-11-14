@@ -1,7 +1,7 @@
 // permissionRoutes.ts
 import express from "express";
-import PermissionsController from "../../controller/permissionController";
-import { authMiddleware } from "../../middleware/authMiddleware";
+import PermissionsController from "../controller/permissionController";
+import { authMiddleware } from "../middleware/authMiddleware";
 
 const router = express.Router();
 

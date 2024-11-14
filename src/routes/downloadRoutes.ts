@@ -1,8 +1,6 @@
-// downloadRoutes.ts
-
 import express from "express";
-import DownloadController from "../../controller/downloadController";
-import { authMiddleware } from "../../middleware/authMiddleware";
+import DownloadController from "../controller/downloadController";
+import { authMiddleware } from "../middleware/authMiddleware";
 
 const router = express.Router();
 

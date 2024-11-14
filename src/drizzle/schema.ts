@@ -1,6 +1,5 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import * as dotenv from "dotenv";
 import {
   pgTable,
   uuid,
@@ -9,13 +8,8 @@ import {
   varchar,
   primaryKey,
 } from "drizzle-orm/pg-core";
-import bcrypt from "bcrypt";
-import { v4 as uuidv4 } from "uuid";
 import { relations } from "drizzle-orm";
-
-
-// Load environment variables
-dotenv.config();
+import config from "./../utils/config";
 
 // Define the UserRole enum
 export enum UserRole {
@@ -25,7 +19,7 @@ export enum UserRole {
 
 // Create a connection pool
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: config.databaseUrl,
 });
 
 // Initialize Drizzle ORM with the pool
@@ -66,9 +60,13 @@ export const tags = pgTable("tags", {
 // Define the permissions table schema
 export const permissions = pgTable("permissions", {
   id: uuid("id").primaryKey(),
-  documentId: uuid("document_id").notNull().references(() => documents.id), 
-  userId: uuid("user_id").notNull().references(() => users.id), 
-  permissionType: varchar("permissionType", { length: 50 }).notNull(), // e.g., "Owner", "Editor", "Viewer"
+  documentId: uuid("document_id")
+    .notNull()
+    .references(() => documents.id, { onDelete: "cascade" }),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id),
+  permissionType: varchar("permissionType", { length: 50 }).notNull(),
   createdAt: timestamp("createdAt").defaultNow(),
   updatedAt: timestamp("updatedAt").defaultNow(),
 });
@@ -79,7 +77,7 @@ export const documentTags = pgTable(
   {
     documentId: uuid("document_id")
       .notNull()
-      .references(() => documents.id),
+      .references(() => documents.id, { onDelete: "cascade" }),
     tagId: uuid("tag_id")
       .notNull()
       .references(() => tags.id),
@@ -89,9 +87,7 @@ export const documentTags = pgTable(
   })
 );
 
-// Define the relationships
-
-// Relationships for documents
+//Defining the Relationships of the documents
 export const documentsRelations = relations(
   documents,
   ({ many }: { many: any }) => ({
@@ -134,4 +130,3 @@ export const permissionsRelations = relations(
     }),
   })
 );
-
