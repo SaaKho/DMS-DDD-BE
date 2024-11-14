@@ -1,4 +1,0 @@
-Hi this is a testfile for document management system 
-This is a sample.txt file lets see if it opens up when we work on this
-
-GOODLLUCK!!

@@ -1,278 +1,111 @@
-import { Response } from "express";
-import { v4 as uuidv4 } from "uuid";
-import {
-  db,
-  documents,
-  permissions,
-  tags,
-  documentTags,
-} from "../drizzle/schema";
+// controllers/documentController.ts
+import { Request, Response } from "express";
+import { DocumentService } from "../services/documentService";
+import { DocumentRepository } from "../repositories/implementations/documentRepository";
+import { ConsoleLogger } from "../logging/console.logger";
 import { AuthenticatedRequest } from "../middleware/authMiddleware";
-import path from "path";
-import multer from "multer";
-import { eq } from "drizzle-orm";
 
-// Configure multer for file storage
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, "uploads/"); // Define your upload folder
-  },
-  filename: (req, file, cb) => {
-    // Use the original name of the file instead of a static "file" name
-    cb(null, file.originalname);
-  },
-});
-
-const upload = multer({ storage });
-
-// Updated getOrCreateTags function without inArray
-const getOrCreateTags = async (tagNames: string[]) => {
-  // Fetch all tags and filter in JavaScript
-  const existingTags = await db.select().from(tags).execute();
-
-  const existingTagNames = existingTags
-    .filter((tag) => tagNames.includes(tag.name))
-    .map((tag) => tag.name);
-
-  const newTagNames = tagNames.filter(
-    (name) => !existingTagNames.includes(name)
-  );
-
-  // Create new tags for any names that don’t already exist
-  const newTags = await Promise.all(
-    newTagNames.map(async (name) => {
-      const newTag = await db
-        .insert(tags)
-        .values({
-          id: uuidv4(),
-          name,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .returning()
-        .execute();
-      return newTag[0];
-    })
-  );
-
-  // Return combined list of existing and new tags
-  return [
-    ...existingTags.filter((tag) => existingTagNames.includes(tag.name)),
-    ...newTags,
-  ];
-};
+const documentService = new DocumentService(
+  new DocumentRepository(),
+  new ConsoleLogger()
+);
 
 class DocumentController {
+  private static handleResponse(
+    result: any,
+    res: Response,
+    successStatus = 200
+  ) {
+    if (result.isFailure()) {
+      return res.status(500).json({ error: result.value });
+    }
+    if (!result.value) {
+      return res.status(404).json({ message: "Document not found." });
+    }
+    return res.status(successStatus).json(result.value);
+  }
+
   static uploadDocument = async (req: AuthenticatedRequest, res: Response) => {
     const file = req.file;
-    let { tags: tagNames } = req.body;
-
-    if (!file) {
-      return res.status(400).json({ error: "No file uploaded" });
-    }
-
     const userId = req.user?.id;
-    if (!userId) {
+    if (!file) return res.status(400).json({ error: "No file uploaded" });
+    if (!userId)
       return res.status(403).json({ error: "User not authenticated" });
-    }
 
-    try {
-      // Ensure tagNames is an array
-      if (typeof tagNames === "string") {
-        tagNames = JSON.parse(tagNames);
-      }
+    const tagNames =
+      typeof req.body.tags === "string"
+        ? JSON.parse(req.body.tags)
+        : req.body.tags;
+    if (!Array.isArray(tagNames))
+      return res.status(400).json({ error: "Tags should be an array" });
 
-      if (!Array.isArray(tagNames)) {
-        return res.status(400).json({ error: "Tags should be an array" });
-      }
+    const originalName = file.originalname;
+    const fileName =
+      originalName.substring(0, originalName.lastIndexOf(".")) || originalName;
+    const fileExtension = originalName.split(".").pop() || "";
 
-      const fileExtension = path.extname(file.originalname).substring(1);
+    const relativeFilePath = `uploads/${fileName}.${fileExtension}`;
 
-      // Insert document metadata into the documents table
-      const newDocument = await db
-        .insert(documents)
-        .values({
-          id: uuidv4(),
-          fileName: file.filename,
-          fileExtension: fileExtension,
-          filepath: file.path,
-          userId: userId,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .returning()
-        .execute();
+    const result = await documentService.createDocument(
+      fileName,
+      fileExtension,
+      relativeFilePath,
+      userId,
+      tagNames
+    );
 
-      const documentId = newDocument[0].id;
-
-      // Get or create tags
-      const allTags = await getOrCreateTags(tagNames);
-
-      // Populate documentTags table to associate the document with tags
-      await Promise.all(
-        allTags.map(async (tag) => {
-          await db
-            .insert(documentTags)
-            .values({
-              documentId,
-              tagId: tag.id,
-            })
-            .execute();
-        })
-      );
-
-      // Set permission for the creator as "Owner"
-      await db
-        .insert(permissions)
-        .values({
-          id: uuidv4(),
-          userId: userId,
-          documentId: documentId,
-          permissionType: "Owner",
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .execute();
-
-      res.status(201).json({
-        message: "Document uploaded successfully",
-        document: newDocument,
-        tags: allTags,
-      });
-    } catch (error) {
-      console.error("Error uploading document:", error);
-      res.status(500).json({ error: "Failed to upload document" });
-    }
-  };
-  static getDocumentById = async (req: AuthenticatedRequest, res: Response) => {
-    const { id } = req.params;
-
-    try {
-      const document = await db
-        .select()
-        .from(documents)
-        .where(eq(documents.id, id)) // Using `eq` for ID comparison
-        .execute();
-
-      if (!document.length) {
-        return res.status(404).json({ message: "Document not found" });
-      }
-
-      res.status(200).json(document[0]);
-    } catch (error) {
-      console.error("Error retrieving document:", error);
-      res.status(500).json({ error: "Failed to retrieve document" });
-    }
+    DocumentController.handleResponse(result, res, 201);
   };
 
-  // Get all documents
-  static getAllDocuments = async (req: AuthenticatedRequest, res: Response) => {
-    try {
-      const allDocuments = await db.select().from(documents).execute();
-      res.status(200).json(allDocuments);
-    } catch (error) {
-      console.error("Error retrieving documents:", error);
-      res.status(500).json({ error: "Failed to retrieve documents" });
-    }
+  static getDocumentById = async (req: Request, res: Response) => {
+    const result = await documentService.fetchDocumentById(req.params.id);
+    DocumentController.handleResponse(result, res);
   };
 
-  // Update document
   static updateDocument = async (req: AuthenticatedRequest, res: Response) => {
-    const { id } = req.params;
-    const { fileName, fileExtension, filepath } = req.body;
+    const userId = req.user?.id;
+    // const userId = req.user.id;
+    const documentId = req.params.id;
+    const { fileName, fileExtension } = req.body;
 
-    try {
-      const updatedDocument = await db
-        .update(documents)
-        .set({
-          fileName: fileName || undefined,
-          fileExtension: fileExtension || undefined,
-          filepath: filepath || undefined,
-          updatedAt: new Date(),
-        })
-        .where(eq(documents.id, id))
-        .returning()
-        .execute();
+    console.log(`Request to update document ${documentId} by user ${userId}`);
 
-      if (!updatedDocument.length) {
-        return res.status(404).json({ message: "Document not found" });
-      }
+    const result = await documentService.updateDocument(
+      userId,
+      documentId,
+      fileName,
+      fileExtension
+    );
 
-      res.status(200).json({
-        message: "Document updated successfully",
-        document: updatedDocument[0],
-      });
-    } catch (error) {
-      console.error("Error updating document:", error);
-      res.status(500).json({ error: "Failed to update document" });
-    }
+    DocumentController.handleResponse(result, res);
   };
 
-  // Delete document
   static deleteDocument = async (req: AuthenticatedRequest, res: Response) => {
-    const { id } = req.params;
+    const userId = req.user?.id;
+    // const userId = req.user.id;
 
-    try {
-      const deleteResult = await db
-        .delete(documents)
-        .where(eq(documents.id, id)) // Using `eq` for ID comparison
-        .execute();
+    const result = await documentService.deleteDocument(req.params.id, userId);
 
-      if (deleteResult.rowCount === 0) {
-        return res.status(404).json({ message: "Document not found" });
-      }
-
-      res.status(204).send();
-    } catch (error) {
-      console.error("Error deleting document:", error);
-      res.status(500).json({ error: "Failed to delete document" });
-    }
+    DocumentController.handleResponse(result, res, 204);
   };
-  static updateDocumentMetadata = async (
-    req: AuthenticatedRequest,
+  static async getPaginatedDocuments(
+    req: Request,
     res: Response
-  ) => {
-    const { id } = req.params; // Document ID
-    const { fileName, fileExtension, filepath } = req.body; // Metadata fields to update
+  ): Promise<void> {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
 
-    try {
-      // Ensure at least one field is provided for update
-      if (!fileName && !fileExtension && !filepath) {
-        return res
-          .status(400)
-          .json({ error: "No metadata fields provided for update" });
-      }
+    const result: any = await documentService.getPaginatedDocuments(
+      page,
+      limit
+    );
 
-      // Log the received values
-      console.log("Received values:", { fileName, fileExtension, filepath });
-
-      // Update document metadata fields
-      const updatedDocument = await db
-        .update(documents)
-        .set({
-          fileName: fileName || undefined,
-          fileExtension: fileExtension || undefined,
-          filepath: filepath ? path.join("uploads", filepath) : undefined, // Dynamically set filepath
-          updatedAt: new Date(),
-        })
-        .where(eq(documents.id, id))
-        .returning()
-        .execute();
-
-      // Check if the document exists
-      if (!updatedDocument.length) {
-        return res.status(404).json({ message: "Document not found" });
-      }
-
-      res.status(200).json({
-        message: "Document metadata updated successfully",
-        document: updatedDocument[0],
-      });
-    } catch (error) {
-      console.error("Error updating document metadata:", error);
-      res.status(500).json({ error: "Failed to update document metadata" });
+    if (result.isFailure()) {
+      res.status(500).json({ error: result.value });
+    } else {
+      res.json(result.value);
     }
-  };
+  }
 }
 
-export { upload, DocumentController };
+export { DocumentController };

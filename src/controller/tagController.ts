@@ -1,95 +1,82 @@
+// controllers/TagController.ts
 import { Request, Response } from "express";
-import { db, tags } from "../drizzle/schema";
-import { eq } from "drizzle-orm";
-import { v4 as uuidv4 } from "uuid"; // Import UUID generator
+import { TagService } from "../services/tagService";
+import { TagRepository } from "../repositories/implementations/tagRepository";
+import { ConsoleLogger } from "../logging/console.logger";
+import { tagSchema } from "../validation/tagValidation";
+
+const logger = new ConsoleLogger();
+const tagRepository = new TagRepository();
+const tagService = new TagService(tagRepository, logger);
 
 class TagController {
-  // Get all tags
-  static getAllTags = async (req: Request, res: Response) => {
-    try {
-      const allTags = await db.select().from(tags).execute();
-      res.status(200).json(allTags);
-    } catch (error) {
-      console.error("Error fetching tags:", error);
-      res.status(500).json({ error: "Failed to fetch tags" });
+  // Centralized response handler
+  private static handleResponse(
+    result: any,
+    res: Response,
+    successStatus = 200,
+    successMessage?: string
+  ) {
+    if (result.isFailure()) {
+      return res
+        .status(result.value.includes("not found") ? 404 : 500)
+        .json({ error: result.value });
     }
-  };
+    const responseContent = successMessage
+      ? { message: successMessage, tag: result.value }
+      : result.value;
+    return res.status(successStatus).json(responseContent);
+  }
 
-  // Create a new tag
-  static createTag = async (req: Request, res: Response) => {
+  static async getAllTags(req: Request, res: Response) {
+    const result = await tagService.getAllTags();
+    TagController.handleResponse(result, res);
+  }
+
+  static async createTag(req: Request, res: Response) {
+    const validation = tagSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({ errors: validation.error.errors });
+    }
     const { name } = req.body;
-    if (!name) {
-      return res.status(400).json({ error: "Tag name is required" });
-    }
+    const result = await tagService.createTag(name);
+    TagController.handleResponse(result, res, 201, "Tag created successfully");
+  }
 
-    try {
-      const newTag = await db
-        .insert(tags)
-        .values({
-          id: uuidv4(), // Generate UUID at application level
-          name,
-        })
-        .returning()
-        .execute();
-      res
-        .status(201)
-        .json({ message: "Tag created successfully", tag: newTag });
-    } catch (error) {
-      console.error("Error creating tag:", error);
-      res.status(500).json({ error: "Failed to create tag" });
+  static async updateTag(req: Request, res: Response) {
+    const validation = tagSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({ errors: validation.error.errors });
     }
-  };
-
-  // Update an existing tag
-  static updateTag = async (req: Request, res: Response) => {
     const { id } = req.params;
     const { name } = req.body;
+    const result = await tagService.updateTag(id, name);
+    TagController.handleResponse(result, res, 200, "Tag updated successfully");
+  }
 
-    if (!name) {
-      return res.status(400).json({ error: "Tag name is required" });
-    }
-
-    try {
-      const updatedTag = await db
-        .update(tags)
-        .set({ name })
-        .where(eq(tags.id, id))
-        .returning()
-        .execute();
-
-      if (updatedTag.length > 0) {
-        res
-          .status(200)
-          .json({ message: "Tag updated successfully", tag: updatedTag });
-      } else {
-        res.status(404).json({ message: "Tag not found" });
-      }
-    } catch (error) {
-      console.error("Error updating tag:", error);
-      res.status(500).json({ error: "Failed to update tag" });
-    }
-  };
-
-  // Delete a tag
-  static deleteTag = async (req: Request, res: Response) => {
+  static async deleteTag(req: Request, res: Response) {
     const { id } = req.params;
-
-    try {
-      const deleteResult = await db
-        .delete(tags)
-        .where(eq(tags.id, id))
-        .execute();
-
-      if (deleteResult.rowCount && deleteResult.rowCount > 0) {
-        res.status(204).send(); // Success: No Content
-      } else {
-        res.status(404).json({ message: "Tag not found" });
-      }
-    } catch (error) {
-      console.error("Error deleting tag:", error);
-      res.status(500).json({ error: "Failed to delete tag" });
+    const result: any = await tagService.deleteTag(id);
+    if (result.isFailure()) {
+      return res.status(500).json({ error: result.value });
     }
-  };
+    if (!result.value) {
+      return res.status(404).json({ message: "Tag not found" });
+    }
+    res.status(204).json();
+  }
+  static async getPaginatedTags(req: Request, res: Response): Promise<void> {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+
+    const result: any = await tagService.getPaginatedTags(page, limit);
+
+    if (result.isFailure()) {
+      res.status(500).json({ error: result.value });
+    } else {
+      res.json(result.value);
+    }
+  }
 }
 
 export default TagController;

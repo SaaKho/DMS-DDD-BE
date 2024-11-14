@@ -8,7 +8,7 @@ export const registerSchema = z.object({
   password: z.string().min(6, "Password must be at least 6 characters long"),
   role: z
     .string()
-    .transform((val) => val.toLowerCase()) // Normalize to lowercase
+    .transform((val) => val.toLowerCase()) 
     .refine((val) =>
       Object.values(UserRole)
         .map((role) => role.toLowerCase())
