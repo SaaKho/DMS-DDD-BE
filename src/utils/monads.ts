@@ -10,7 +10,7 @@ export class Failure<L> {
   constructor(public value: L) {}
 
   // `isFailure` is a type guard that tells TypeScript this instance is a `Failure`.
-  isFailure(): this is Failure<L> {
+  isFailure(): this is Failure<never> {
     return true;
   }
 

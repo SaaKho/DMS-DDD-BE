@@ -1,16 +1,13 @@
-// services/PermissionsService.ts
 import { IPermissionsRepository } from "../repositories/interfaces/IPermissionRepository";
 import { Either, ok, failure } from "../utils/monads";
 import { Logger } from "../logging/logger";
+import { PermissionFactory } from "../factories/PermissionFactory";
 
 export class PermissionsService {
-  private permissionsRepository: IPermissionsRepository;
-  private logger: Logger;
-
-  constructor(permissionsRepository: IPermissionsRepository, logger: Logger) {
-    this.permissionsRepository = permissionsRepository;
-    this.logger = logger;
-  }
+  constructor(
+    private permissionsRepository: IPermissionsRepository,
+    private logger: Logger
+  ) {}
 
   async grantPermission(
     documentId: string,
@@ -19,23 +16,26 @@ export class PermissionsService {
     requesterId: string,
     requesterRole: string
   ): Promise<Either<string, any>> {
-    // Check if requester has admin or ownership rights
+    // Verify requester permissions
     if (requesterRole !== "Admin") {
-      const ownershipCheck: any =
-        await this.permissionsRepository.checkOwnership(
-          documentId,
-          requesterId
-        );
+      const ownershipCheck = await this.permissionsRepository.checkOwnership(
+        documentId,
+        requesterId
+      );
       if (ownershipCheck.isFailure() || !ownershipCheck.value) {
         return failure("Insufficient permissions to grant access");
       }
     }
 
-    return await this.permissionsRepository.add(
+    // Create a Permission entity
+    const permission = PermissionFactory.create(
       documentId,
       userId,
       permissionType
     );
+
+    // Persist the entity
+    return await this.permissionsRepository.add(permission);
   }
 
   async revokePermission(
@@ -44,18 +44,21 @@ export class PermissionsService {
     requesterId: string,
     requesterRole: string
   ): Promise<Either<string, boolean>> {
-    // Check if requester has admin or ownership rights
+    // Verify requester permissions
     if (requesterRole !== "Admin") {
-      const ownershipCheck: any =
-        await this.permissionsRepository.checkOwnership(
-          documentId,
-          requesterId
-        );
+      const ownershipCheck = await this.permissionsRepository.checkOwnership(
+        documentId,
+        requesterId
+      );
       if (ownershipCheck.isFailure() || !ownershipCheck.value) {
         return failure("Insufficient permissions to revoke access");
       }
     }
 
-    return await this.permissionsRepository.remove(documentId, userId);
+    // Create a Permission entity
+    const permission = PermissionFactory.create(documentId, userId, ""); // Type not needed
+
+    // Remove the entity
+    return await this.permissionsRepository.remove(permission);
   }
 }

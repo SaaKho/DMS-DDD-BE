@@ -1,13 +1,13 @@
 import express from "express";
 import DownloadController from "../controller/downloadController";
-import { authMiddleware } from "../middleware/authMiddleware";
+import { AuthMiddleware } from "../middleware/authMiddleware";
 
 const router = express.Router();
 
 // Route to generate a short-lived download link
 router.post(
   "/generate/:documentId",
-  authMiddleware,
+  AuthMiddleware,
   DownloadController.generateDownloadLink
 );
 
