@@ -25,9 +25,7 @@ export class DownloadService {
     this.logger.log(`Generating download link for document: ${documentId}`);
 
     // Explicitly type documentResult to help TypeScript infer the type
-    const documentResult: any = await this.documentRepository.fetchById(
-      documentId
-    );
+    const documentResult = await this.documentRepository.fetchById(documentId);
 
     // Check if fetching the document was successful
     if (documentResult.isFailure()) {
@@ -56,7 +54,7 @@ export class DownloadService {
       jwt.verify(token, DOWNLOAD_SECRET);
       this.logger.log("Token verified for document download");
 
-      const documentResult: any = await this.documentRepository.fetchById(
+      const documentResult = await this.documentRepository.fetchById(
         documentId
       );
 
@@ -75,7 +73,7 @@ export class DownloadService {
       const filePath = path.join(
         __dirname,
         "../../uploads",
-        `${document.fileName}.${document.fileExtension}`
+        `${document.getFileName()}.${document.getFileExtension()}`
       );
 
       return ok(filePath);

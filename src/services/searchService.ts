@@ -1,61 +1,76 @@
-// services/SearchService.ts
 import { db, documents, tags, documentTags } from "../drizzle/schema";
-import { inArray, ilike, eq, between } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import { Either, ok, failure } from "../utils/monads";
+import { Logger } from "../logging/logger";
 
 export class SearchService {
-  async searchDocuments(filters: any): Promise<Either<string, any[]>> {
+  private logger: Logger;
+
+  constructor(logger: Logger) {
+    this.logger = logger;
+  }
+
+  async searchDocumentsByTags(
+    tagNames: string | string[]
+  ): Promise<Either<string, any[]>> {
     try {
-      const { filename, fileExtension, tagNames, startDate, endDate } = filters;
+      this.logger.log("Starting searchDocumentsByTags service...");
+      this.logger.log(`Filtering by tags: ${tagNames}`);
 
-      // Start with the base query
-      let query: any = db.select().from(documents);
+      // Ensure tagNames is an array
+      const tagList = Array.isArray(tagNames) ? tagNames : tagNames.split(",");
 
-      // Filter by filename (case-insensitive)
-      if (filename) {
-        query = query.where(ilike(documents.fileName, `%${filename}%`));
+      // Step 1: Fetch matching tags from the database
+      const existingTags = await db
+        .select({ id: tags.id, name: tags.name })
+        .from(tags)
+        .where(inArray(tags.name, tagList))
+        .execute();
+
+      if (existingTags.length === 0) {
+        this.logger.error("No matching tags found in the database.");
+        return failure(`No matching tags found for: ${tagNames}`);
       }
 
-      // Filter by file extension
-      if (fileExtension) {
-        query = query.where(
-          eq(documents.fileExtension, fileExtension as string)
+      this.logger.log(`Matching tags found: ${JSON.stringify(existingTags)}`);
+
+      // Step 2: Fetch document IDs linked to these tags
+      const tagIds = existingTags.map((tag) => tag.id);
+
+      const documentTagsQuery = await db
+        .select({ documentId: documentTags.documentId })
+        .from(documentTags)
+        .where(inArray(documentTags.tagId, tagIds))
+        .execute();
+
+      const documentIds = documentTagsQuery.map((row) => row.documentId);
+
+      if (documentIds.length === 0) {
+        this.logger.error(
+          `Tags found but no documents are associated with the given tags: ${tagNames}`
+        );
+        return failure(
+          `Tags found, but no documents are associated with the given tags: ${tagNames}`
         );
       }
 
-      // Filter by date range
-      if (startDate && endDate) {
-        query = query.where(
-          between(
-            documents.createdAt,
-            new Date(startDate as string),
-            new Date(endDate as string)
-          )
-        );
-      }
+      this.logger.log(`Document IDs matching tags: ${documentIds}`);
 
-      // Filter by tags
-      if (tagNames) {
-        const tagList = (
-          typeof tagNames === "string" ? tagNames.split(",") : tagNames
-        ) as string[];
+      // Step 3: Fetch documents matching these IDs
+      const results = await db
+        .select()
+        .from(documents)
+        .where(inArray(documents.id, documentIds))
+        .execute();
 
-        const tagIdsQuery = await db
-          .select({ documentId: documentTags.documentId })
-          .from(documentTags)
-          .innerJoin(tags, eq(documentTags.tagId, tags.id))
-          .where(inArray(tags.name, tagList))
-          .execute();
+      this.logger.log(
+        `Search query executed successfully. Found ${results.length} documents.`
+      );
 
-        const documentIds = tagIdsQuery.map((tag) => tag.documentId);
-        query = query.where(inArray(documents.id, documentIds));
-      }
-
-      const results = await query.execute();
       return ok(results);
     } catch (error) {
-      console.error("Error in searchDocuments service:", error);
-      return failure("Failed to search documents");
+      this.logger.error(`Error in searchDocumentsByTags service: ${error}`);
+      return failure("Failed to search documents by tags");
     }
   }
 }

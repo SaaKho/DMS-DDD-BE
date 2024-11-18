@@ -1,32 +1,11 @@
-// interfaces/IDocumentRepository.ts
+// src/repositories/interfaces/IDocumentRepository.ts
 import { Either } from "../../utils/monads";
+import { Document } from "../../entities/Document";
 
 export interface IDocumentRepository {
-  add(
-    fileName: string,
-    fileExtension: string,
-    filepath: string,
-    userId: string
-  ): Promise<Either<string, any>>;
-  fetchById(id: string): Promise<Either<string, any | null>>;
-  update(
-    id: string,
-    fileName?: string,
-    fileExtension?: string,
-    filepath?: string
-  ): Promise<Either<string, any | null>>;
+  add(document: Document): Promise<Either<string, Document>>;
+  fetchById(id: string): Promise<Either<string, Document | null>>;
+  update(document: Document): Promise<Either<string, Document | null>>;
   remove(id: string): Promise<Either<string, boolean>>;
-  getOrCreateTags(tagNames: string[]): Promise<Either<string, any[]>>;
-    linkDocumentWithTags(
-    documentId: string,
-    tags: any[]
-  ): Promise<Either<string, boolean>>;
-  assignPermission(
-    documentId: string,
-    userId: string,
-    permissionType: string
-  ): Promise<Either<string, any>>;
-  fetchAll(): Promise<Either<string, any[]>>;
-  fetchUserRole(userId: string): Promise<Either<string, string>>;
-  fetchUserPermission(documentId: string, userId: string): Promise<Either<string, string>>;
+  fetchAll(): Promise<Either<string, Document[]>>;
 }

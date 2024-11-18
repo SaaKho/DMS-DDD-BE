@@ -1,5 +1,5 @@
 import express from "express";
-import { authMiddleware, authorizeRole } from "../middleware/authMiddleware";
+import { AuthMiddleware, authorizeRole } from "../middleware/authMiddleware";
 import UserController from "../controller/userController";
 
 const router = express.Router();
@@ -9,13 +9,13 @@ router.post("/register", UserController.registerUser);
 router.post("/login", UserController.loginUser);
 router.put(
   "/update/:id",
-  authMiddleware,
+  AuthMiddleware,
   authorizeRole("Admin"),
   UserController.updateUser
 );
 router.delete(
   "/deleteUser/:id",
-  authMiddleware,
+  AuthMiddleware,
   authorizeRole("Admin"),
   UserController.deleteUser
 );

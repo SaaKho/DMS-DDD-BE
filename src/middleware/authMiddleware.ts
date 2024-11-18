@@ -1,13 +1,12 @@
 import { Request, Response, NextFunction } from "express";
-import jwt from "jsonwebtoken";
-
-const JWT_SECRET = process.env.JWT_SECRET || "carbonteq";
+import { jwtAuthHandler } from "../auth/authConfig";
 
 export interface AuthenticatedRequest extends Request {
-  user?: any;
+  user?: { id: string; username: string; role: string };
 }
 
-export const authMiddleware = (
+// Middleware for checking if a user is authenticated
+export const AuthMiddleware = async (
   req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
@@ -20,18 +19,25 @@ export const authMiddleware = (
 
   const token = authHeader.split(" ")[1];
 
+  // Use JwtAuthHandler to verify and decode the token
+  const isValid = await jwtAuthHandler.verify(token);
+  if (!isValid) {
+    return res.status(403).json({ message: "Invalid or expired token" });
+  }
+
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded;
+    // Decode the token and attach user info to the request
+    const decodedUser = await jwtAuthHandler.decode(token);
+    req.user = decodedUser;
     next();
   } catch (error) {
-    return res.status(403).json({ message: "Invalid or expired token" });
+    return res.status(403).json({ message: "Failed to decode token" });
   }
 };
 
+// Middleware for role-based authorization
 export const authorizeRole = (role: string) => {
   return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    // console.log(req.user);
     if (!req.user || req.user.role !== role) {
       return res
         .status(403)

@@ -1,23 +1,13 @@
-import { UserRole } from "../../drizzle/schema";
 import { Either } from "../../utils/monads";
+import { User } from "../../entities/User";
 
 export interface IUserRepository {
-  add(
-    username: string,
-    email: string,
-    password: string,
-    role: UserRole
-  ): Promise<Either<string, any>>;
-  fetchByEmail(email: string): Promise<Either<string, any | null>>;
-  fetchById(id: string): Promise<Either<string, any | null>>;
-  fetchByUsername(username: string): Promise<Either<string, any | null>>;
-  fetchAll(): Promise<Either<string, any[]>>;
-  update(
-    id: string,
-    username?: string,
-    email?: string,
-    password?: string,
-    role?: UserRole
-  ): Promise<Either<string, any | null>>;
+  add(user: User): Promise<Either<string, User>>;
+  fetchById(id: string): Promise<Either<string, User | null>>;
+  fetchByUsername(username: string): Promise<Either<string, User | null>>;
+  fetchByEmail(email: string): Promise<Either<string, User | null>>;
+  fetchAll(): Promise<Either<string, User[]>>;
+  update(user: User): Promise<Either<string, User | null>>;
   remove(id: string): Promise<Either<string, boolean>>;
+  fetchUserRole(userId: string): Promise<Either<string, string>>;
 }

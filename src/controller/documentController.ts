@@ -5,8 +5,13 @@ import { DocumentRepository } from "../repositories/implementations/documentRepo
 import { ConsoleLogger } from "../logging/console.logger";
 import { AuthenticatedRequest } from "../middleware/authMiddleware";
 
+import { TagRepository } from "../repositories/implementations/tagRepository";
+import { PermissionsRepository } from "../repositories/implementations/permissionRepository";
+
 const documentService = new DocumentService(
   new DocumentRepository(),
+  new TagRepository(),
+  new PermissionsRepository(),
   new ConsoleLogger()
 );
 
@@ -64,7 +69,8 @@ class DocumentController {
 
   static updateDocument = async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user?.id;
-    // const userId = req.user.id;
+    if (!userId)
+      return res.status(403).json({ error: "User not authenticated" });
     const documentId = req.params.id;
     const { fileName, fileExtension } = req.body;
 
@@ -82,8 +88,9 @@ class DocumentController {
 
   static deleteDocument = async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user?.id;
-    // const userId = req.user.id;
 
+    if (!userId)
+      return res.status(403).json({ error: "User not authenticated" });
     const result = await documentService.deleteDocument(req.params.id, userId);
 
     DocumentController.handleResponse(result, res, 204);

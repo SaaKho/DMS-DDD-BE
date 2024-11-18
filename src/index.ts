@@ -1,6 +1,4 @@
-// app.ts
 import express from "express";
-import config from "./utils/config"; // Import config object
 import authRoutes from "./routes/userRoutes";
 import documentRoutes from "./routes/documentRoutes";
 import tagRoutes from "./routes/tagRoutes";
@@ -21,6 +19,4 @@ app.use("/api/downloads", downloadRoutes);
 app.use("/api/search", searchRoute);
 app.use("/api/permissions", permissionRoutes);
 
-app.listen(config.port, () => {
-  console.log(`Server is running on port ${config.port}`);
-});
+export default app; 
